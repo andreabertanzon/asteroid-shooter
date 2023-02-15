@@ -1,2 +1,2 @@
 # asteroid-shooter
-Simple Asteroid shooter implemented in zig with raylib
+Simple Asteroid shooter implemented in zig with sdl2
