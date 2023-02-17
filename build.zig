@@ -22,8 +22,10 @@ pub fn build(b: *std.Build) void {
     const sdl_path = "/opt/homebrew/";
     exe.addIncludePath(sdl_path ++ "include/SDL2");
     exe.addLibraryPath(sdl_path ++ "lib/");
+    exe.addIncludePath(sdl_path ++ "");
     //b.installBinFile(sdl_path ++ "lib/x64/SDL2.lib", "SDL2.lib");
     exe.linkSystemLibrary("SDL2");
+    exe.linkSystemLibrary("SDL2_image");
     exe.linkLibC();
     exe.install();
 }
