@@ -52,7 +52,7 @@ pub fn main() anyerror!void {
     print("{any}", .{player_texture});
 
     // init with starting position
-    var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = WINDOW_WIDTH / 2, .h = WINDOW_HEIGHT / 2 };
+    var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = undefined, .h = undefined };
     _ = c.SDL_QueryTexture(player_texture, undefined, undefined, &destination.w, &destination.h);
 
     // reduce the source by 10x
