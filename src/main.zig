@@ -15,6 +15,10 @@ const Game = struct {
     perfFrequency: f64,
     renderer: *c.SDL_Renderer,
     player: Entity = undefined,
+    left: bool = false,
+    right: bool = false,
+    up: bool = false,
+    down: bool = false,
     pub fn getTime(self: *Game) f64 {
         return @intToFloat(f64, c.SDL_GetPerformanceCounter()) * 1000 / self.perfFrequency;
     }
@@ -23,6 +27,12 @@ const Game = struct {
 const Entity = struct {
     tex: *c.SDL_Texture,
     dest: c.SDL_Rect,
+    pub fn movePlayer(self:*Entity, x:f64, y:f64) void{
+        var num = @floatToInt(i32, x);
+        var numy = @floatToInt(i32, y);
+        self.dest.x = std.math.clamp(self.dest.x + num, 0, WINDOW_WIDTH - self.dest.w);
+        self.dest.y = std.math.clamp(self.dest.y + numy, 0, WINDOW_HEIGHT - self.dest.h);
+    }
 };
 
 pub fn main() anyerror!void {
@@ -43,21 +53,22 @@ pub fn main() anyerror!void {
     print("{}", .{game.perfFrequency});
 
     // load assests
-    const player_texture: *c.SDL_Texture = c.IMG_LoadTexture(game.renderer, "src/assets/player.png") orelse {
+    const player_texture: *c.SDL_Texture = c.IMG_LoadTexture(game.renderer, "src/assets/ship.png") orelse {
         // var p:[*c]const u8 = undefined;
         // p=c.SDL_GetError();
         // print("Error here, {any}",.{p});
         return;
     };
-    print("{any}", .{player_texture});
 
     // init with starting position
     var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = undefined, .h = undefined };
     _ = c.SDL_QueryTexture(player_texture, undefined, undefined, &destination.w, &destination.h);
 
     // reduce the source by 10x
-    destination.w = @divTrunc(destination.w, 1);
-    destination.h = @divTrunc(destination.h, 1);
+    // destination.w = @divTrunc(destination.w, 1);
+    // destination.h = @divTrunc(destination.h, 1);
+    destination.w = destination.w;
+    destination.h = destination.h;
 
     game.player = Entity{
         .tex = player_texture,
@@ -71,21 +82,22 @@ pub fn main() anyerror!void {
     mainloop: while (true) {
         start = game.getTime();
         // 1. Get Keyboard state
-        //        var state = c.SDL_GetKeyboardState(null);
+        var state = c.SDL_GetKeyboardState(undefined);
 
         // 2. Events
         var sdl_event: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&sdl_event) != 0) {
             switch (sdl_event.type) {
                 c.SDL_QUIT => break :mainloop,
-                c.SDL_KEYDOWN => switch (sdl_event.key.keysym.scancode) {
-                    ESC_KEY => break :mainloop,
-                    else => print("{}", .{sdl_event.key.keysym.scancode}),
-                },
+                // c.SDL_KEYDOWN => switch (sdl_event.key.keysym.scancode) {
+                //     ESC_KEY => break :mainloop,
+                //     else => print("{}", .{sdl_event.key.keysym.scancode}),
+                // },
                 else => {},
             }
         }
-
+        
+        //print("{c}",.{state[c.SDL_SCANCODE_W]});
         // 3. Rendering portion
         _ = c.SDL_SetRenderDrawColor(game.renderer, 0xff, 0xff, 0xff, 0xff);
         _ = c.SDL_RenderClear(game.renderer);
@@ -105,6 +117,25 @@ pub fn main() anyerror!void {
         // rect.y = 170 + @floatToInt(i32, r * @sin(a + 2 * t));
         // _ = c.SDL_SetRenderDrawColor(game.renderer, 0, 0, 0xff, 0xff);
         // _ = c.SDL_RenderFillRect(game.renderer, &rect);
+        game.left = state[c.SDL_SCANCODE_A] > 0;
+        game.right = state[c.SDL_SCANCODE_D] > 0;
+        game.up = state[c.SDL_SCANCODE_W] > 0;
+        game.down = state[c.SDL_SCANCODE_S] > 0;
+
+        var delta_motion:f64 = 4;
+
+        if(game.left){
+            game.player.movePlayer(-delta_motion, 0);
+        }
+        if(game.right){
+            game.player.movePlayer(delta_motion, 0);
+        }
+        if(game.up){
+            game.player.movePlayer(0, -delta_motion);
+        }
+        if(game.down){
+            game.player.movePlayer(0, delta_motion);
+        }
         _ = c.SDL_RenderCopy(game.renderer, game.player.tex, null, &game.player.dest);
         // the third argument -> which part of the player sheet to grab and display!
 
