@@ -8,21 +8,33 @@ const c = @cImport({
 const WINDOW_FLAGS = c.SDL_WINDOW_SHOWN;
 const TARGET_DELTA_TIME: f64 = @intToFloat(f64, 1000) / @intToFloat(f64, 60);
 const ESC_KEY = 41;
-const WINDOW_WIDTH:i32 = 1600;
-const WINDOW_HEIGHT:i32 = 960;
-const PLAYER_SPEED :f64 = 500.0;
-const LASER_SPEED :f64 = 700.0;
+const WINDOW_WIDTH: i32 = 1600;
+const WINDOW_HEIGHT: i32 = 960;
+const PLAYER_SPEED: f64 = 500.0;
+
+//LASERS
+const LASER_SPEED: f64 = 700.0;
+const NUM_OF_LASERS: usize = 100;
+const LASER_COOLDOWN_TIMER: f64 = 50;
 
 const Game = struct {
     perfFrequency: f64 = 0.0,
     renderer: *c.SDL_Renderer = undefined,
+
+    //PLAYER
+    player_tex: *c.SDL_Texture = undefined,
     player: Entity = undefined,
-    laser: Entity = undefined,
+
+    //LASER
+    laser_tex: *c.SDL_Texture = undefined,
+    lasers: [NUM_OF_LASERS]Entity = undefined,
+
+    //MOVEMENT
     left: bool = false,
     right: bool = false,
     up: bool = false,
     down: bool = false,
-    fire:bool = false,
+    fire: bool = false,
 
     pub fn getTime(self: *Game) f64 {
         return @intToFloat(f64, c.SDL_GetPerformanceCounter()) * 1000 / self.perfFrequency;
@@ -40,32 +52,38 @@ const Game = struct {
 
         destination.w = @divTrunc(destination.w * 4, 1);
         destination.h = @divTrunc(destination.h * 4, 1);
+        self.player_tex = player_texture orelse return;
 
         self.player = Entity{
-            .tex =  player_texture orelse return,
             .dest = destination,
-            .health = 10,
         };
 
-        var destination2 = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = 0, .h = 0 };
         const laser_texture: ?*c.SDL_Texture = c.IMG_LoadTexture(self.renderer, "src/assets/shot.png");
-        _ = c.SDL_QueryTexture(laser_texture, undefined, undefined, &destination2.w, &destination2.h);
+        self.laser_tex = laser_texture orelse return;
 
-        destination2.w = @divTrunc(destination2.w, 1);
-        destination2.h = @divTrunc(destination2.h, 1);
+        var laser_w: i32 = 0;
+        var laser_h: i32 = 0;
+        _ = c.SDL_QueryTexture(laser_texture, undefined, undefined, &laser_w, &laser_h);
 
-        self.laser = Entity {
-            .tex = laser_texture orelse return,
-            .dest = destination2,
-            .health = 0,
-        };
+        var i: usize = 0;
+        while (i < NUM_OF_LASERS) : (i += 1) {
+            var d = c.SDL_Rect{
+                .x = WINDOW_WIDTH + 20,
+                .y = 0,
+                .w = laser_w,
+                .h = laser_h,
+            };
+
+            self.lasers[i] = Entity{
+                .dest = d,
+            };
+        }
     }
 };
 
 const Entity = struct {
-    tex: *c.SDL_Texture,
     dest: c.SDL_Rect,
-    health: u32,
+    health: u32 = 0,
     pub fn movePlayer(self: *Entity, x: f64, y: f64) void {
         var num = @floatToInt(i32, x);
         var numy = @floatToInt(i32, y);
@@ -88,9 +106,9 @@ pub fn main() anyerror!void {
     defer c.SDL_DestroyRenderer(renderer);
 
     var perf = c.SDL_GetPerformanceFrequency();
-    
-    var game = Game {};
-    
+
+    var game = Game{};
+
     game.initGameAssets(renderer, @intToFloat(f64, perf));
 
     var frame: usize = 0;
@@ -155,25 +173,37 @@ pub fn main() anyerror!void {
         _ = c.SDL_RenderCopy(game.renderer, game.player.tex, null, &game.player.dest);
         // the third argument -> which part of the player sheet to grab and display!
 
-        if(game.fire and game.laser.health == 0){
-            game.laser.dest.x = game.player.dest.x + 30;
-            game.laser.dest.y = game.player.dest.y;
-            game.laser.health = 1;
+        if (game.fire and game.laser_cooldown == 0) {
+
+            //game.laser.health = 1;
+
+            reload: for (game.lasers) |laser| {
+                if (laser.dest.x > WINDOW_WIDTH) {
+                    game.laser.dest.x = game.player.dest.x + 30;
+                    game.laser.dest.y = game.player.dest.y;
+
+                    game.laser_cooldown = LASER_COOLDOWN_TIMER;
+                    break :reload;
+                }
+            }
         }
 
-        if(game.laser.dest.x >= WINDOW_WIDTH and game.laser.health > 0){
+        if (game.laser.dest.x >= WINDOW_WIDTH and game.laser.health > 0) {
             game.laser.health = 0;
             game.laser.dest.x = game.player.dest.x;
         }
 
-        if(game.laser.health > 0){
+        if (game.laser.health > 0) {
             // var motion = getDeltaMotion(LASER_SPEED);
-            
+
             game.laser.dest.x = game.laser.dest.x + p;
             _ = c.SDL_RenderCopy(game.renderer, game.laser.tex, null, &game.laser.dest);
         }
 
-       // enforcing a certain framerate.
+        // DECREMENT LASER
+        game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
+
+        // enforcing a certain framerate.
         end = game.getTime();
         while (end - start < TARGET_DELTA_TIME) {
             end = game.getTime();
@@ -187,7 +217,7 @@ pub fn main() anyerror!void {
 
 pub fn getDeltaMotion(speed: f64) f64 {
     const t = TARGET_DELTA_TIME;
-    var result : f64 = speed * t;
+    var result: f64 = speed * t;
     result = result / 1000;
     return result;
 }
