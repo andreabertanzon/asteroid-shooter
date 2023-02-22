@@ -12,22 +12,45 @@ const WINDOW_WIDTH = 1600;
 const WINDOW_HEIGHT = 960;
 
 const Game = struct {
-    perfFrequency: f64,
-    renderer: *c.SDL_Renderer,
+    perfFrequency: f64 = 0.0,
+    renderer: *c.SDL_Renderer = undefined,
     player: Entity = undefined,
     left: bool = false,
     right: bool = false,
     up: bool = false,
     down: bool = false,
+
     pub fn getTime(self: *Game) f64 {
         return @intToFloat(f64, c.SDL_GetPerformanceCounter()) * 1000 / self.perfFrequency;
+    }
+
+    pub fn initGameAssets(self: *Game, rend: *c.SDL_Renderer, pFreq: f64) void {
+        self.perfFrequency = pFreq;
+        self.renderer = rend;
+
+        const player_texture: ?*c.SDL_Texture = c.IMG_LoadTexture(self.renderer, "src/assets/ship.png");
+
+        // init with starting position
+        var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = undefined, .h = undefined };
+        _ = c.SDL_QueryTexture(player_texture, undefined, undefined, &destination.w, &destination.h);
+
+        // reduce the source by 10x
+        destination.w = @divTrunc(destination.w * 4, 1);
+        destination.h = @divTrunc(destination.h * 4, 1);
+        //destination.w = destination.w;
+        //destination.h = destination.h;
+
+        self.player = Entity{
+            .tex =  player_texture orelse return,
+            .dest = destination,
+        };
     }
 };
 
 const Entity = struct {
     tex: *c.SDL_Texture,
     dest: c.SDL_Rect,
-    pub fn movePlayer(self:*Entity, x:f64, y:f64) void{
+    pub fn movePlayer(self: *Entity, x: f64, y: f64) void {
         var num = @floatToInt(i32, x);
         var numy = @floatToInt(i32, y);
         self.dest.x = std.math.clamp(self.dest.x + num, 0, WINDOW_WIDTH - self.dest.w);
@@ -49,31 +72,10 @@ pub fn main() anyerror!void {
     defer c.SDL_DestroyRenderer(renderer);
 
     var perf = c.SDL_GetPerformanceFrequency();
-    var game = Game{ .renderer = renderer, .perfFrequency = @intToFloat(f64, perf) };
-    print("{}", .{game.perfFrequency});
-
-    // load assests
-    const player_texture: *c.SDL_Texture = c.IMG_LoadTexture(game.renderer, "src/assets/ship.png") orelse {
-        // var p:[*c]const u8 = undefined;
-        // p=c.SDL_GetError();
-        // print("Error here, {any}",.{p});
-        return;
-    };
-
-    // init with starting position
-    var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = undefined, .h = undefined };
-    _ = c.SDL_QueryTexture(player_texture, undefined, undefined, &destination.w, &destination.h);
-
-    // reduce the source by 10x
-    // destination.w = @divTrunc(destination.w, 1);
-    // destination.h = @divTrunc(destination.h, 1);
-    destination.w = destination.w;
-    destination.h = destination.h;
-
-    game.player = Entity{
-        .tex = player_texture,
-        .dest = destination,
-    };
+    
+    var game = Game {};
+    
+    game.initGameAssets(renderer, @intToFloat(f64, perf));
 
     var frame: usize = 0;
     var start: f64 = 0;
@@ -96,44 +98,31 @@ pub fn main() anyerror!void {
                 else => {},
             }
         }
-        
-        //print("{c}",.{state[c.SDL_SCANCODE_W]});
         // 3. Rendering portion
         _ = c.SDL_SetRenderDrawColor(game.renderer, 0xff, 0xff, 0xff, 0xff);
         _ = c.SDL_RenderClear(game.renderer);
-        // var rect = c.SDL_Rect{ .x = 0, .y = 0, .w = 60, .h = 60 };
-        // const a = 0.06 * @intToFloat(f32, frame);
-        // const t = 2 * std.math.pi / 3.0;
-        // const r = 100 * @cos(0.1 * a);
-        // rect.x = 290 + @floatToInt(i32, r * @cos(a));
-        // rect.y = 170 + @floatToInt(i32, r * @sin(a));
-        // _ = c.SDL_SetRenderDrawColor(game.renderer, 0xff, 0, 0, 0xff);
-        // _ = c.SDL_RenderFillRect(game.renderer, &rect);
-        // rect.x = 290 + @floatToInt(i32, r * @cos(a + t));
-        // rect.y = 170 + @floatToInt(i32, r * @sin(a + t));
-        // _ = c.SDL_SetRenderDrawColor(game.renderer, 0, 0xff, 0, 0xff);
-        // _ = c.SDL_RenderFillRect(game.renderer, &rect);
-        // rect.x = 290 + @floatToInt(i32, r * @cos(a + 2 * t));
-        // rect.y = 170 + @floatToInt(i32, r * @sin(a + 2 * t));
-        // _ = c.SDL_SetRenderDrawColor(game.renderer, 0, 0, 0xff, 0xff);
-        // _ = c.SDL_RenderFillRect(game.renderer, &rect);
+
         game.left = state[c.SDL_SCANCODE_A] > 0;
         game.right = state[c.SDL_SCANCODE_D] > 0;
         game.up = state[c.SDL_SCANCODE_W] > 0;
         game.down = state[c.SDL_SCANCODE_S] > 0;
 
-        var delta_motion:f64 = 4;
+        if (state[c.SDL_SCANCODE_ESCAPE] > 0) {
+            break :mainloop;
+        }
 
-        if(game.left){
+        var delta_motion: f64 = 4;
+
+        if (game.left) {
             game.player.movePlayer(-delta_motion, 0);
         }
-        if(game.right){
+        if (game.right) {
             game.player.movePlayer(delta_motion, 0);
         }
-        if(game.up){
+        if (game.up) {
             game.player.movePlayer(0, -delta_motion);
         }
-        if(game.down){
+        if (game.down) {
             game.player.movePlayer(0, delta_motion);
         }
         _ = c.SDL_RenderCopy(game.renderer, game.player.tex, null, &game.player.dest);
