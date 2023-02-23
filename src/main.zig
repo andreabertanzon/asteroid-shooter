@@ -26,6 +26,7 @@ const Game = struct {
     player: Entity = undefined,
 
     //LASER
+    laser_cooldown: f64 = 0.0,
     laser_tex: *c.SDL_Texture = undefined,
     lasers: [NUM_OF_LASERS]Entity = undefined,
 
@@ -170,17 +171,19 @@ pub fn main() anyerror!void {
             game.player.movePlayer(0, delta_motion);
         }
 
-        _ = c.SDL_RenderCopy(game.renderer, game.player.tex, null, &game.player.dest);
+        _ = c.SDL_RenderCopy(game.renderer, game.player_tex, null, &game.player.dest);
         // the third argument -> which part of the player sheet to grab and display!
 
         if (game.fire and game.laser_cooldown == 0) {
 
             //game.laser.health = 1;
 
-            reload: for (game.lasers) |laser| {
+            reload: for (&game.lasers) | laser, index | {
                 if (laser.dest.x > WINDOW_WIDTH) {
-                    game.laser.dest.x = game.player.dest.x + 30;
-                    game.laser.dest.y = game.player.dest.y;
+                    game.lasers[index].dest.x = game.player.dest.x + 30;
+                    game.lasers[index].dest.y = game.player.dest.y;
+                    // laser.dest.x = game.player.dest.x + 30;
+                    // laser.dest.y = game.player.dest.y;
 
                     game.laser_cooldown = LASER_COOLDOWN_TIMER;
                     break :reload;
@@ -188,16 +191,12 @@ pub fn main() anyerror!void {
             }
         }
 
-        if (game.laser.dest.x >= WINDOW_WIDTH and game.laser.health > 0) {
-            game.laser.health = 0;
-            game.laser.dest.x = game.player.dest.x;
-        }
-
-        if (game.laser.health > 0) {
-            // var motion = getDeltaMotion(LASER_SPEED);
-
-            game.laser.dest.x = game.laser.dest.x + p;
-            _ = c.SDL_RenderCopy(game.renderer, game.laser.tex, null, &game.laser.dest);
+        for(game.lasers) | laser, index | {
+            if(laser.dest.x < WINDOW_WIDTH){
+                game.lasers[index].dest.x += p;
+                // laser.dest.x += p;
+                _ = c.SDL_RenderCopy(game.renderer, game.laser_tex, null, &laser.dest);
+            }
         }
 
         // DECREMENT LASER
