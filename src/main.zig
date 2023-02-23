@@ -125,7 +125,7 @@ pub fn main() anyerror!void {
     mainloop: while (true) {
         start = game.getTime();
         // 1. Get Keyboard state
-        var state = c.SDL_GetKeyboardState(undefined);
+        var state = c.SDL_GetKeyboardState(null);
 
         // 2. Events
         var sdl_event: c.SDL_Event = undefined;
@@ -135,10 +135,10 @@ pub fn main() anyerror!void {
                     print("closing", .{});
                     break :mainloop;
                 },
-                // c.SDL_KEYDOWN => switch (sdl_event.key.keysym.scancode) {
-                //     ESC_KEY => break :mainloop,
-                //     else => print("{}", .{sdl_event.key.keysym.scancode}),
-                // },
+                c.SDL_KEYDOWN => switch (sdl_event.key.keysym.scancode) {
+                    ESC_KEY => break :mainloop,
+                    else => print("{}", .{sdl_event.key.keysym.scancode}),
+                },
                 else => {},
             }
         }
