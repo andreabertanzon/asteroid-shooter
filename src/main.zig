@@ -17,6 +17,11 @@ const LASER_SPEED: f64 = 700.0;
 const NUM_OF_LASERS: usize = 100;
 const LASER_COOLDOWN_TIMER: f64 = 50;
 
+//DRONES
+const DRONE_SPEED: f64 = 700;
+const DRONE_SPAWN_COOLDOWN_TIMER:f64 = 700;
+const NUM_OF_DRONES:u32 = 10;
+
 const Game = struct {
     perfFrequency: f64 = 0.0,
     renderer: *c.SDL_Renderer = undefined,
@@ -29,6 +34,11 @@ const Game = struct {
     laser_cooldown: f64 = 0.0,
     laser_tex: *c.SDL_Texture = undefined,
     lasers: [NUM_OF_LASERS]Entity = undefined,
+
+    //DRONES
+    drone_tex: *c.SDL_Texture = undefined,
+    drones: [NUM_OF_DRONES]Entity = undefined,
+    drones_spawn_cooldown:f64 = 0.0,
 
     //MOVEMENT
     left: bool = false,
@@ -120,7 +130,7 @@ pub fn main() anyerror!void {
     print("{}", .{t});
     const l = LASER_SPEED;
     const laserMotion = getDeltaMotion(l);
-    const p = @floatToInt(c_int, laserMotion);
+    const laserMotionIntValue = @floatToInt(c_int, laserMotion);
 
     mainloop: while (true) {
         start = game.getTime();
@@ -175,7 +185,7 @@ pub fn main() anyerror!void {
         _ = c.SDL_RenderCopy(game.renderer, game.player_tex, null, &game.player.dest);
         // the third argument -> which part of the player sheet to grab and display!
 
-        if (game.fire and game.laser_cooldown == 0) {
+        if (game.fire and !(game.laser_cooldown > 0)) {
 
             //game.laser.health = 1;
 
@@ -183,8 +193,6 @@ pub fn main() anyerror!void {
                 if (laser.dest.x > WINDOW_WIDTH) {
                     game.lasers[index].dest.x = game.player.dest.x + 30;
                     game.lasers[index].dest.y = game.player.dest.y;
-                    // laser.dest.x = game.player.dest.x + 30;
-                    // laser.dest.y = game.player.dest.y;
 
                     game.laser_cooldown = LASER_COOLDOWN_TIMER;
                     break :reload;
@@ -194,19 +202,15 @@ pub fn main() anyerror!void {
 
         for(game.lasers) | laser, index | {
             if(laser.dest.x < WINDOW_WIDTH){
-                  game.lasers[index].dest.x += p;
-                // laser.dest.x += p;
+                game.lasers[index].dest.x += laserMotionIntValue;
                 _ = c.SDL_RenderCopy(game.renderer, game.laser_tex, null, &laser.dest);
             }
         }
 
-        // DECREMENT LASER
-        if(game.laser_cooldown > 0){
-            game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
-        }else if(game.laser_cooldown < 0){
-            game.laser_cooldown = 0;
-        }
-
+        // DECREMENT COOLDOWNS
+        game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
+        game.drones_spawn_cooldown -= DRONE_SPEED * (TARGET_DELTA_TIME / 1000);
+        
         // enforcing a certain framerate.
         end = game.getTime();
         while (end - start < TARGET_DELTA_TIME) {
@@ -220,8 +224,5 @@ pub fn main() anyerror!void {
 }
 
 pub fn getDeltaMotion(speed: f64) f64 {
-    const t = TARGET_DELTA_TIME;
-    var result: f64 = speed * t;
-    result = result / 1000;
-    return result;
+    return (speed * TARGET_DELTA_TIME) / 1000;
 }
