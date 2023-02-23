@@ -98,7 +98,7 @@ pub fn main() anyerror!void {
     _ = c.SDL_Init(c.SDL_INIT_VIDEO); // Initializes SDL library
     _ = c.IMG_Init(c.IMG_INIT_PNG); // initializes PNG reading.
 
-    //defer c.SDL_Quit(); //TODO: check why this hangs? the other defer all work correctly.
+    defer c.SDL_Quit(); 
 
     var window = c.SDL_CreateWindow("asteroid shooter", c.SDL_WINDOWPOS_CENTERED, c.SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_FLAGS);
     defer c.SDL_DestroyWindow(window);
@@ -124,6 +124,7 @@ pub fn main() anyerror!void {
 
     mainloop: while (true) {
         start = game.getTime();
+        
         // 1. Get Keyboard state
         var state = c.SDL_GetKeyboardState(null);
 
@@ -193,14 +194,18 @@ pub fn main() anyerror!void {
 
         for(game.lasers) | laser, index | {
             if(laser.dest.x < WINDOW_WIDTH){
-                game.lasers[index].dest.x += p;
+                  game.lasers[index].dest.x += p;
                 // laser.dest.x += p;
                 _ = c.SDL_RenderCopy(game.renderer, game.laser_tex, null, &laser.dest);
             }
         }
 
         // DECREMENT LASER
-        game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
+        if(game.laser_cooldown > 0){
+            game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
+        }else if(game.laser_cooldown < 0){
+            game.laser_cooldown = 0;
+        }
 
         // enforcing a certain framerate.
         end = game.getTime();
