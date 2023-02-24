@@ -19,12 +19,13 @@ const LASER_COOLDOWN_TIMER: f64 = 50;
 
 //DRONES
 const DRONE_SPEED: f64 = 700;
-const DRONE_SPAWN_COOLDOWN_TIMER:f64 = 700;
+const DRONE_SPAWN_COOLDOWN_TIMER:f64 = 500;
 const NUM_OF_DRONES:u32 = 10;
 
 const Game = struct {
     perfFrequency: f64 = 0.0,
     renderer: *c.SDL_Renderer = undefined,
+    randImpl:std.rand.Xoshiro256 = std.rand.DefaultPrng.init(42),
 
     //PLAYER
     player_tex: *c.SDL_Texture = undefined,
@@ -58,8 +59,8 @@ const Game = struct {
         const player_texture: ?*c.SDL_Texture = c.IMG_LoadTexture(self.renderer, "src/assets/ship.png");
 
         // init with starting position
-        var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = undefined, .h = undefined };
-        _ = c.SDL_QueryTexture(player_texture, undefined, undefined, &destination.w, &destination.h);
+        var destination = c.SDL_Rect{ .x = 20, .y = WINDOW_HEIGHT / 2, .w = 0, .h = 0 };
+        _ = c.SDL_QueryTexture(player_texture, null, null, &destination.w, &destination.h);
 
         destination.w = @divTrunc(destination.w * 4, 1);
         destination.h = @divTrunc(destination.h * 4, 1);
@@ -74,7 +75,7 @@ const Game = struct {
 
         var laser_w: i32 = 0;
         var laser_h: i32 = 0;
-        _ = c.SDL_QueryTexture(laser_texture, undefined, undefined, &laser_w, &laser_h);
+        _ = c.SDL_QueryTexture(laser_texture, null, null, &laser_w, &laser_h);
 
         var i: usize = 0;
         while (i < NUM_OF_LASERS) : (i += 1) {
@@ -89,12 +90,43 @@ const Game = struct {
                 .dest = d,
             };
         }
+
+        const drone_texture: ?*c.SDL_Texture = c.IMG_LoadTexture(self.renderer, "src/assets/enemy.png");
+        self.drone_tex = drone_texture orelse return;
+
+        var drone_w: i32 = 0;
+        var drone_h: i32 = 0;
+        _ = c.SDL_QueryTexture(drone_texture, null, null, &drone_w, &drone_h);
+        drone_w = @divTrunc(drone_w * 4,1);
+        drone_h = @divTrunc(drone_h * 4, 1);
+
+        var idrone: usize = 0;
+        while (idrone < NUM_OF_DRONES) : (idrone += 1) {
+            var max = @floatToInt(u32,DRONE_SPEED * 1.2);
+            var min = @floatToInt(u32,DRONE_SPEED * 0.5);
+            var randomSpeed = @intToFloat(f64,self.randImpl.random().intRangeAtMost(u32, min, max));
+
+            var d = c.SDL_Rect{
+                .x = -(drone_w), //WINDOW_WIDTH + 20,
+                .y = 0,
+                .w = drone_w,
+                .h = drone_h,
+            };
+
+            self.drones[idrone] = Entity{
+                .dest = d,
+                .dx = randomSpeed,
+                .dy = randomSpeed,
+            };
+        }
     }
 };
 
 const Entity = struct {
     dest: c.SDL_Rect,
     health: u32 = 0,
+    dx: f64 = 0.0, 
+    dy: f64 = 0.0,
     pub fn movePlayer(self: *Entity, x: f64, y: f64) void {
         var num = @floatToInt(i32, x);
         var numy = @floatToInt(i32, y);
@@ -207,10 +239,30 @@ pub fn main() anyerror!void {
             }
         }
 
+        // DRONES
+        for(game.drones) | _, ind | {
+            var currentDrone = &game.drones[ind];
+            if(currentDrone.dest.x <= 0 and game.drones_spawn_cooldown < 0){
+                currentDrone.dest.x = WINDOW_WIDTH;
+                //fn intRangeAtMost(r: Random, comptime T: type, at_least: T, at_most: T) T
+                var num = game.randImpl.random().intRangeAtMost(i32, 120, WINDOW_HEIGHT - 120);
+                currentDrone.dest.y = num;
+
+                game.drones_spawn_cooldown = DRONE_SPAWN_COOLDOWN_TIMER;
+            }
+            var steps:i32 = @floatToInt(i32, getDeltaMotion(currentDrone.dx));
+            currentDrone.dest.x -= steps;
+
+            if(currentDrone.dest.x > 0 ) {
+                _ = c.SDL_RenderCopy(game.renderer, game.drone_tex, null, &currentDrone.dest);
+                // print("CurrentDrone:\n\t x: {}, y: {}, rc:{}, indexArray: {}\n", .{currentDrone.dest.x,currentDrone.dest.y, rCopyRes , ind });
+            }
+        }
+
         // DECREMENT COOLDOWNS
         game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
-        game.drones_spawn_cooldown -= DRONE_SPEED * (TARGET_DELTA_TIME / 1000);
-        
+        game.drones_spawn_cooldown -= getDeltaMotion(LASER_SPEED);
+
         // enforcing a certain framerate.
         end = game.getTime();
         while (end - start < TARGET_DELTA_TIME) {
