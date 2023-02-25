@@ -10,15 +10,17 @@ const TARGET_DELTA_TIME: f64 = @intToFloat(f64, 1000) / @intToFloat(f64, 60);
 const ESC_KEY = 41;
 const WINDOW_WIDTH: i32 = 1600;
 const WINDOW_HEIGHT: i32 = 960;
+
+// PLAYER
 const PLAYER_SPEED: f64 = 500.0;
 
 //LASERS
 const LASER_SPEED: f64 = 700.0;
 const NUM_OF_LASERS: usize = 100;
-const LASER_COOLDOWN_TIMER: f64 = 50;
+const LASER_COOLDOWN_TIMER: f64 = 200;
 
 //DRONES
-const DRONE_SPEED: f64 = 700;
+const DRONE_SPEED: f64 = 500;
 const DRONE_SPAWN_COOLDOWN_TIMER:f64 = 500;
 const NUM_OF_DRONES:u32 = 10;
 
@@ -217,51 +219,73 @@ pub fn main() anyerror!void {
         _ = c.SDL_RenderCopy(game.renderer, game.player_tex, null, &game.player.dest);
         // the third argument -> which part of the player sheet to grab and display!
 
+        // FIRE LASERS
         if (game.fire and !(game.laser_cooldown > 0)) {
 
             //game.laser.health = 1;
 
-            reload: for (&game.lasers) | laser, index | {
-                if (laser.dest.x > WINDOW_WIDTH) {
-                    game.lasers[index].dest.x = game.player.dest.x + 30;
-                    game.lasers[index].dest.y = game.player.dest.y;
-
+            reload:for (&game.lasers) | *laser | {
+                if (laser.health == 0 or laser.dest.x > WINDOW_WIDTH) {
+                    laser.dest.x = game.player.dest.x + 30;
+                    laser.dest.y = game.player.dest.y;
+                    laser.health = 1;
                     game.laser_cooldown = LASER_COOLDOWN_TIMER;
+                    
                     break :reload;
                 }
             }
         }
 
-        for(game.lasers) | laser, index | {
-            if(laser.dest.x < WINDOW_WIDTH){
-                game.lasers[index].dest.x += laserMotionIntValue;
+        // DRONES
+        respawn: for(game.drones) | *drone | {
+            // var currentDrone = &game.drones[ind];
+            if((drone.health == 0 or drone.dest.x < 0) and game.drones_spawn_cooldown < 0){
+                drone.dest.x = WINDOW_WIDTH;
+                //fn intRangeAtMost(r: Random, comptime T: type, at_least: T, at_most: T) T
+                var num = game.randImpl.random().intRangeAtMost(i32, 120, WINDOW_HEIGHT - 120);
+                drone.dest.y = num;
+                drone.health = 1;
+                game.drones_spawn_cooldown = DRONE_SPAWN_COOLDOWN_TIMER;
+
+                break :respawn;
+            }
+        }
+
+        for(game.lasers) | *laser |{
+            if(laser.health == 0){
+                continue;
+            }
+
+            detectCollision: for(game.drones) |*drone| {
+                if(drone.health == 0){
+                    continue;
+                }
+                var hit = collision(&laser.dest, &drone.dest);
+                if(hit){
+                    drone.health = 0;
+                    laser.health = 0;
+                    break :detectCollision;
+                }
+            }
+
+            if(laser.health > 0){
+                laser.dest.x += laserMotionIntValue;
                 _ = c.SDL_RenderCopy(game.renderer, game.laser_tex, null, &laser.dest);
             }
         }
 
-        // DRONES
-        for(game.drones) | _, ind | {
-            var currentDrone = &game.drones[ind];
-            if(currentDrone.dest.x <= 0 and game.drones_spawn_cooldown < 0){
-                currentDrone.dest.x = WINDOW_WIDTH;
-                //fn intRangeAtMost(r: Random, comptime T: type, at_least: T, at_most: T) T
-                var num = game.randImpl.random().intRangeAtMost(i32, 120, WINDOW_HEIGHT - 120);
-                currentDrone.dest.y = num;
-
-                game.drones_spawn_cooldown = DRONE_SPAWN_COOLDOWN_TIMER;
-            }
-            var steps:i32 = @floatToInt(i32, getDeltaMotion(currentDrone.dx));
-            currentDrone.dest.x -= steps;
-
-            if(currentDrone.dest.x > 0 ) {
-                _ = c.SDL_RenderCopy(game.renderer, game.drone_tex, null, &currentDrone.dest);
+        for(game.drones) | *drone | {
+            if(drone.health > 0 ) {
+                var steps:i32 = @floatToInt(i32, getDeltaMotion(drone.dx));
+                drone.dest.x -= steps;
+                _ = c.SDL_RenderCopy(game.renderer, game.drone_tex, null, &drone.dest);
                 // print("CurrentDrone:\n\t x: {}, y: {}, rc:{}, indexArray: {}\n", .{currentDrone.dest.x,currentDrone.dest.y, rCopyRes , ind });
             }
         }
 
         // DECREMENT COOLDOWNS
         game.laser_cooldown -= getDeltaMotion(LASER_SPEED);
-        game.drones_spawn_cooldown -= getDeltaMotion(LASER_SPEED);
+        game.drones_spawn_cooldown -= getDeltaMotion(DRONE_SPEED);
 
         // enforcing a certain framerate.
         end = game.getTime();
@@ -277,4 +301,11 @@ pub fn main() anyerror!void {
 
 pub fn getDeltaMotion(speed: f64) f64 {
     return (speed * TARGET_DELTA_TIME) / 1000;
+}
+
+pub fn collision(obj1: *c.SDL_Rect, obj2: *c.SDL_Rect) bool {
+    const max = std.math.max;
+    const min = std.math.min;
+
+    return (max(obj1.x, obj2.x) < min(obj1.x + obj1.w, obj2.x + obj2.w )) and (max(obj1.y, obj2.y) < min(obj1.y + obj1.h, obj2.y + obj2.h));
 }
